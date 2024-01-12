@@ -1,9 +1,16 @@
+import os 
+import pandas as pd
+
+import pickle
 from typing import Any
+
 from geopy.geocoders import Nominatim
 import networkx as nx
 import osmnx as ox
-import pickle
-import os 
+from arcgis.gis import GIS
+from arcgis.geocoding import geocode, reverse_geocode
+
+gis = GIS()
 
 def get_lat_long(city):
     # Initialize Nominatim API
@@ -52,4 +59,42 @@ class DistanceMesure:
 
     def shortest_path(self, orig_node, dest_node):
         return nx.shortest_path(self.G, orig_node, dest_node)
-    
+
+def load_list_poi(csv_file = "list_poi.csv"):
+    return list(pd.read_csv(csv_file, header=None)[0])
+
+def get_poi(lat, long, list_poi = None, geocode_args = {'max_locations':200}):
+
+    location ={
+        'Y' : lat,
+        'X' : long,
+    }
+
+    if list_poi is None:
+        list_poi = load_list_poi()
+
+    df = pd.DataFrame()
+    for poi in list_poi:
+        address = {
+            'category': poi,
+            'location': location
+        }
+        df = pd.concat([df, pd.DataFrame(geocode(address, **geocode_args))])
+
+    return df
+
+def dict_to_col(df, dict_col, key):
+    return df[dict_col].apply(lambda loc: loc[key])
+
+def auto_clean_poi(df):
+    df['latitude'] = df['location'].apply(lambda loc: loc['y'])
+    df['longitude'] = df['location'].apply(lambda loc: loc['x'])
+    df['type'] = df['attributes'].apply(lambda loc: loc['Type'])
+    df['phone'] = df['attributes'].apply(lambda loc: loc['Phone'])
+    df['url'] = df['attributes'].apply(lambda loc: loc['URL'])
+
+    df.drop(['location'], axis=1, inplace=True)
+    df.drop(['attributes'], axis=1, inplace=True)
+    df.drop(['extent'], axis=1, inplace=True)
+    return df
+
